@@ -6,7 +6,7 @@ router.get('/scooters', getScooters)
 
 router.post('/scooters', createScooter)
 
-router.put('/scooters/:scooter_id', updateScooter);
+router.patch('/scooters/:scooter_id', updateScooter);
 
 router.delete('/scooters/:scooter_id', deleteScooter); 
 
