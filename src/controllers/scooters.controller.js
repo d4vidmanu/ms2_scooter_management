@@ -1,8 +1,21 @@
 import { pool } from "../db.js"
 
+// Simulación en el controlador de scooters
 export const getScooters = async (req, res) => {
-    const result = await pool.query('SELECT * FROM scooters')
-    res.json(result[0])}
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const offset = (page - 1) * limit;
+  
+    const [rows] = await pool.query('SELECT * FROM scooters LIMIT ? OFFSET ?', [limit, offset]);
+    const [total] = await pool.query('SELECT COUNT(*) as count FROM scooters');
+  
+    const totalPages = Math.ceil(total[0].count / limit);
+  
+    res.json({
+      scooters: rows,
+      totalPages: totalPages
+    });
+  };
 
 export const createScooter = async (req, res) => {
     const { scooter_status, battery_level, location } = req.body;
