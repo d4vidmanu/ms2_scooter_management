@@ -5,6 +5,8 @@ import rideRoutes from './routes/rides.routes.js';
 
 const app = express();
 
+app.use(express.json());
+
 app.use(scooterRoutes);
 
 app.use(rideRoutes);

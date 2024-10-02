@@ -6,8 +6,8 @@ router.get('/scooters', getScooters)
 
 router.post('/scooters', createScooter)
 
-router.put('/scooters', updateScooter)
+router.put('/scooters/:scooter_id', updateScooter);
 
-router.delete('/scooters', deleteScooter)
+router.delete('/scooters/:scooter_id', deleteScooter); 
 
 export default router;
