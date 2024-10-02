@@ -7,8 +7,8 @@ router.get('/rides', getRide)
 
 router.post('/rides', createRide)
 
-router.put('/rides', updateRide)
+router.patch('/rides/:ride_id', updateRide)
 
-router.delete('/rides', deleteRide)
+router.delete('/rides/:ride_id', deleteRide)
 
 export default router;

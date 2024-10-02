@@ -11,11 +11,5 @@ app.use(scooterRoutes);
 
 app.use(rideRoutes);
 
-
-// app.get('/rides', async (req, res) => {
-//     const result = await pool.query('SELECT * FROM rides')
-//     res.json(result[0])
-// });
-
 app.listen(3000);
 console.log('Server running on port 3000');
