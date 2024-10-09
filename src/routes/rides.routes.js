@@ -1,14 +1,35 @@
 import { Router } from "express";
-import { getRide, createRide, updateRide, deleteRide} from '../controllers/rides.controller.js';
+import {
+  getRides,
+  getRideById,
+  createRide,
+  updateRide,
+  deleteRide,
+  createBasicRide,
+  updateRideEnd,
+} from "../controllers/rides.controller.js";
 
 const router = Router();
 
-router.get('/rides', getRide)
+// Obtener todos los rides
+router.get("/rides", getRides);
 
-router.post('/rides', createRide)
+// Obtener un ride por ID
+router.get("/rides/:id", getRideById);
 
-router.patch('/rides/:ride_id', updateRide)
+// Crear un nuevo ride
+router.post("/rides", createRide);
 
-router.delete('/rides/:ride_id', deleteRide)
+// Actualizar un ride por ID
+router.put("/rides/:id", updateRide);
+
+// Eliminar un ride por ID
+router.delete("/rides/:id", deleteRide);
+
+// Crear un ride solo con scooter_id y user_id
+router.post("/rides/create", createBasicRide);
+
+// Actualizar el ride con end_time y end_location
+router.put("/rides/:id/end", updateRideEnd);
 
 export default router;
