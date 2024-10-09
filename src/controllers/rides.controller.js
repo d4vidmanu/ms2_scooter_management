@@ -5,47 +5,83 @@ export const getRide = async (req, res) => {
     res.json(result[0])}
 
 export const createRide = async (req, res) => {
-    const { scooter_id, user_id, start_location } = req.body;
+    const { scooter_id, user_id } = req.body;
 
-    // Separar latitud y longitud a partir de la cadena de start_location
-    const [lat, lng] = start_location.split(",").map(coord => parseFloat(coord.trim()));
+    try {
+        // 1. Obtener la ubicación del scooter desde la tabla scooters
+        const [scooter] = await pool.query(
+            `SELECT ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?`,
+            [scooter_id]
+        );
 
-    // Crear el valor de POINT para MySQL con el SRID 4326
-    const point = `ST_GeomFromText('POINT(${lat} ${lng})', 4326)`;
+        // Verificar si el scooter existe
+        if (scooter.length === 0) {
+            return res.status(404).json({ message: 'Scooter no encontrado' });
+        }
 
-    // Ejecutar la consulta SQL para crear el ride
-    const [result] = await pool.query(
-        `INSERT INTO rides (scooter_id, user_id, start_location) 
-        VALUES (?, ?, ${point})`,
-        [scooter_id, user_id]
-    );
+        const scooterLocation = scooter[0].location; // El valor viene como un texto 'POINT(lng lat)'
 
-    // Responder con el ID del ride creado
-    res.status(201).json({
-        message: 'Ride creado exitosamente',
-        ride_id: result.insertId,
-    });
+        // 2. Insertar el viaje usando la ubicación del scooter como start_location con SRID 4326
+        const [result] = await pool.query(
+            `INSERT INTO rides (scooter_id, user_id, start_location) 
+            VALUES (?, ?, ST_SRID(ST_GeomFromText(?), 4326))`,
+            [scooter_id, user_id, scooterLocation]
+        );
+
+        // Responder con el ID del ride creado
+        res.status(201).json({
+            message: 'Ride creado exitosamente',
+            ride_id: result.insertId,
+        });
+
+    } catch (error) {
+        // Manejo de errores
+        console.error(error);
+        res.status(500).json({ message: 'Error al crear el ride' });
+    }
 };
+    
+    
 
 export const updateRide = async (req, res) => {
-    const { end_location } = req.body;
-    const { ride_id } = req.params;
+const { ride_id } = req.params;
 
-    // Obtener la fecha y hora actual para end_time
-    const end_time = new Date();
+// Obtener la fecha y hora actual para end_time
+const end_time = new Date();
 
-    // Separar latitud y longitud a partir de la cadena de end_location
-    const [lat, lng] = end_location.split(",").map(coord => parseFloat(coord.trim()));
+try {
+    // 1. Obtener el scooter_id relacionado con el ride
+    const [ride] = await pool.query(
+        `SELECT scooter_id FROM rides WHERE ride_id = ?`,
+        [ride_id]
+    );
 
-    // Crear el valor de POINT para MySQL con el SRID 4326
-    const point = `ST_GeomFromText('POINT(${lat} ${lng})', 4326)`;
+    // Verificar si el ride existe
+    if (ride.length === 0) {
+        return res.status(404).json({ message: 'Ride no encontrado' });
+    }
 
-    // Ejecutar la consulta SQL para actualizar end_time y end_location
+    const scooter_id = ride[0].scooter_id;
+
+    // 2. Obtener la ubicación del scooter desde la tabla scooters
+    const [scooter] = await pool.query(
+        `SELECT ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?`,
+        [scooter_id]
+    );
+
+    // Verificar si el scooter existe
+    if (scooter.length === 0) {
+        return res.status(404).json({ message: 'Scooter no encontrado' });
+    }
+
+    const end_location = scooter[0].location; // El valor viene como un texto 'POINT(lng lat)'
+
+    // 3. Actualizar el ride con end_time y la ubicación del scooter como end_location con SRID 4326
     const [result] = await pool.query(
         `UPDATE rides 
-        SET end_time = ?, end_location = ${point}
+        SET end_time = ?, end_location = ST_SRID(ST_GeomFromText(?), 4326)
         WHERE ride_id = ?`,
-        [end_time, ride_id]
+        [end_time, end_location, ride_id]
     );
 
     // Verificar si se actualizó algún registro
@@ -54,7 +90,14 @@ export const updateRide = async (req, res) => {
     }
 
     res.json({ message: 'Ride actualizado exitosamente' });
+
+} catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al actualizar el ride' });
+}
 };
+
+
 
 export const deleteRide = async (req, res) => {
     const { ride_id } = req.params;

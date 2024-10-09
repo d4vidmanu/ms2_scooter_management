@@ -96,3 +96,19 @@ export const deleteScooter = async (req, res) => {
 
     res.json({ message: 'Scooter eliminado exitosamente' });
 };
+
+// Obtener un scooter por su ID
+export const getScooterById = async (req, res) => {
+    const { scooter_id } = req.params;  // Se obtiene el ID del scooter desde los parámetros de la URL
+
+    // Ejecutar la consulta para obtener el scooter por ID
+    const [rows] = await pool.query('SELECT * FROM scooters WHERE scooter_id = ?', [scooter_id]);
+
+    // Verificar si se encontró algún registro
+    if (rows.length === 0) {
+        return res.status(404).json({ message: 'Scooter no encontrado' });
+    }
+
+    // Responder con el scooter encontrado
+    res.json(rows[0]);
+};
