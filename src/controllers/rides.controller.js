@@ -1,114 +1,115 @@
-import { pool } from "../db.js"
-
-export const getRide = async (req, res) => {
-    const result = await pool.query('SELECT * FROM rides')
-    res.json(result[0])}
+import { pool } from "../db.js";
 
 export const createRide = async (req, res) => {
-    const { scooter_id, user_id } = req.body;
+  const { scooter_id, user_id, start_time, start_location } = req.body;
 
-    try {
-        // 1. Obtener la ubicación del scooter desde la tabla scooters
-        const [scooter] = await pool.query(
-            `SELECT ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?`,
-            [scooter_id]
-        );
+  const [lat, lng] = start_location
+    .split(",")
+    .map((coord) => parseFloat(coord.trim()));
+  const point = `POINT(${lat} ${lng})`;
 
-        // Verificar si el scooter existe
-        if (scooter.length === 0) {
-            return res.status(404).json({ message: 'Scooter no encontrado' });
-        }
+  try {
+    const [result] = await pool.query(
+      "INSERT INTO rides (scooter_id, user_id, start_time, start_location) VALUES (?, ?, ?, ST_GeomFromText(?, 4326))",
+      [scooter_id, user_id, start_time, point]
+    );
 
-        const scooterLocation = scooter[0].location; // El valor viene como un texto 'POINT(lng lat)'
+    const [newRide] = await pool.query(
+      "SELECT ride_id, scooter_id, user_id, start_time, end_time, ST_AsText(start_location) AS start_location, ST_AsText(end_location) AS end_location, cost FROM rides WHERE ride_id = ?",
+      [result.insertId]
+    );
 
-        // 2. Insertar el viaje usando la ubicación del scooter como start_location con SRID 4326
-        const [result] = await pool.query(
-            `INSERT INTO rides (scooter_id, user_id, start_location) 
-            VALUES (?, ?, ST_SRID(ST_GeomFromText(?), 4326))`,
-            [scooter_id, user_id, scooterLocation]
-        );
-
-        // Responder con el ID del ride creado
-        res.status(201).json({
-            message: 'Ride creado exitosamente',
-            ride_id: result.insertId,
-        });
-
-    } catch (error) {
-        // Manejo de errores
-        console.error(error);
-        res.status(500).json({ message: 'Error al crear el ride' });
-    }
+    // Devolver el objeto del ride recién creado
+    res.status(201).json({
+      ride: newRide[0],
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al crear el ride" });
+  }
 };
-    
-    
+
+export const getRides = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT ride_id, scooter_id, user_id, start_time, end_time, ST_AsText(start_location) AS start_location, ST_AsText(end_location) AS end_location, cost FROM rides"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al obtener los rides" });
+  }
+};
+
+export const getRideById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT ride_id, scooter_id, user_id, start_time, end_time, ST_AsText(start_location) AS start_location, ST_AsText(end_location) AS end_location, cost FROM rides WHERE ride_id = ?",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Ride no encontrado" });
+    }
+
+    // Devolver el objeto del ride
+    res.json(rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al obtener el ride" });
+  }
+};
 
 export const updateRide = async (req, res) => {
-const { ride_id } = req.params;
+  const { id } = req.params;
+  const { end_time, end_location } = req.body;
 
-// Obtener la fecha y hora actual para end_time
-const end_time = new Date();
+  const [lat, lng] = end_location
+    .split(",")
+    .map((coord) => parseFloat(coord.trim()));
+  const point = `POINT(${lat} ${lng})`;
 
-try {
-    // 1. Obtener el scooter_id relacionado con el ride
-    const [ride] = await pool.query(
-        `SELECT scooter_id FROM rides WHERE ride_id = ?`,
-        [ride_id]
-    );
-
-    // Verificar si el ride existe
-    if (ride.length === 0) {
-        return res.status(404).json({ message: 'Ride no encontrado' });
-    }
-
-    const scooter_id = ride[0].scooter_id;
-
-    // 2. Obtener la ubicación del scooter desde la tabla scooters
-    const [scooter] = await pool.query(
-        `SELECT ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?`,
-        [scooter_id]
-    );
-
-    // Verificar si el scooter existe
-    if (scooter.length === 0) {
-        return res.status(404).json({ message: 'Scooter no encontrado' });
-    }
-
-    const end_location = scooter[0].location; // El valor viene como un texto 'POINT(lng lat)'
-
-    // 3. Actualizar el ride con end_time y la ubicación del scooter como end_location con SRID 4326
+  try {
     const [result] = await pool.query(
-        `UPDATE rides 
-        SET end_time = ?, end_location = ST_SRID(ST_GeomFromText(?), 4326)
-        WHERE ride_id = ?`,
-        [end_time, end_location, ride_id]
+      "UPDATE rides SET end_time = ?, end_location = ST_GeomFromText(?, 4326) WHERE ride_id = ?",
+      [end_time, point, id]
     );
 
-    // Verificar si se actualizó algún registro
     if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Ride no encontrado' });
+      return res.status(404).json({ message: "Ride no encontrado" });
     }
 
-    res.json({ message: 'Ride actualizado exitosamente' });
+    const [updatedRide] = await pool.query(
+      "SELECT ride_id, scooter_id, user_id, start_time, end_time, ST_AsText(start_location) AS start_location, ST_AsText(end_location) AS end_location, cost FROM rides WHERE ride_id = ?",
+      [id]
+    );
 
-} catch (error) {
+    // Devolver el objeto del ride actualizado
+    res.json(updatedRide[0]);
+  } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error al actualizar el ride' });
-}
+    res.status(500).json({ message: "Error al actualizar el ride" });
+  }
 };
 
-
-
 export const deleteRide = async (req, res) => {
-    const { ride_id } = req.params;
+  const { id } = req.params;
 
-    // Ejecutar la consulta SQL para eliminar el ride
-    const [result] = await pool.query('DELETE FROM rides WHERE ride_id = ?', [ride_id]);
+  try {
+    const [result] = await pool.query("DELETE FROM rides WHERE ride_id = ?", [
+      id,
+    ]);
 
-    // Verificar si se eliminó algún registro
     if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Ride no encontrado' });
+      return res.status(404).json({ message: "Ride no encontrado" });
     }
 
-    res.json({ message: 'Ride eliminado exitosamente' });
+    // Devolver mensaje de éxito
+    res.status(200).json({ message: "Ride eliminado correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al eliminar el ride" });
+  }
 };

@@ -1,114 +1,116 @@
-import { pool } from "../db.js"
-
-// Simulación en el controlador de scooters
-export const getScooters = async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    const offset = (page - 1) * limit;
-  
-    const [rows] = await pool.query('SELECT * FROM scooters LIMIT ? OFFSET ?', [limit, offset]);
-    const [total] = await pool.query('SELECT COUNT(*) as count FROM scooters');
-  
-    const totalPages = Math.ceil(total[0].count / limit);
-  
-    res.json({
-      scooters: rows,
-      totalPages: totalPages
-    });
-  };
+import { pool } from "../db.js";
 
 export const createScooter = async (req, res) => {
-    const { scooter_status, battery_level, location } = req.body;
+  const { scooter_status, battery_level, location } = req.body;
 
-    // Separar latitud y longitud a partir de la cadena de location
-    const [lat, lng] = location.split(",").map(coord => parseFloat(coord.trim()));
+  const [lat, lng] = location
+    .split(",")
+    .map((coord) => parseFloat(coord.trim()));
+  const point = `POINT(${lat} ${lng})`;
 
-    // Crear el valor de POINT para MySQL con el SRID 4326
-    const point = `ST_GeomFromText('POINT(${lat} ${lng})', 4326)`;  // Especificar el SRID 4326
-
-    // Ejecutar la consulta
-    const [rows] = await pool.query(
-        'INSERT INTO scooters (scooter_status, battery_level, location) VALUES (?, ?, ' + point + ')',
-        [scooter_status, battery_level]
+  try {
+    const [result] = await pool.query(
+      "INSERT INTO scooters (scooter_status, battery_level, location) VALUES (?, ?, ST_GeomFromText(?, 4326))",
+      [scooter_status, battery_level, point]
     );
 
-    // Responder con el ID del scooter creado
+    const [newScooter] = await pool.query(
+      "SELECT scooter_id, scooter_status, battery_level, ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?",
+      [result.insertId]
+    );
+
+    // Devolver solo el objeto del scooter creado
     res.status(201).json({
-        message: 'Scooter creado exitosamente',
-        scooter_id: rows.insertId,
+      scooter: newScooter[0],
     });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al crear el scooter" });
+  }
+};
+
+export const getScooterById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await pool.query(
+      "SELECT scooter_id, scooter_status, battery_level, ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Scooter no encontrado" });
+    }
+
+    // Devolver solo el objeto del scooter
+    res.json(rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al obtener el scooter" });
+  }
 };
 
 export const updateScooter = async (req, res) => {
-    const { scooter_status, battery_level, location } = req.body;
-    const { scooter_id } = req.params;  // Se obtiene el ID del scooter desde los parámetros de la URL
+  const { id } = req.params;
+  const { scooter_status, battery_level, location } = req.body;
 
-    // Crear un array de campos y valores para actualizar dinámicamente
-    const fields = [];
-    const values = [];
+  const [lat, lng] = location
+    .split(",")
+    .map((coord) => parseFloat(coord.trim()));
+  const point = `POINT(${lat} ${lng})`;
 
-    // Verificamos qué campos han sido proporcionados y los añadimos a la consulta
-    if (scooter_status) {
-        fields.push('scooter_status = ?');
-        values.push(scooter_status);
-    }
-    if (battery_level) {
-        fields.push('battery_level = ?');
-        values.push(battery_level);
-    }
-    if (location) {
-        // Separar latitud y longitud a partir de la cadena de location
-        const [lat, lng] = location.split(",").map(coord => parseFloat(coord.trim()));
-        const point = `ST_GeomFromText('POINT(${lat} ${lng})', 4326)`;
-        fields.push(`location = ${point}`);
-    }
+  try {
+    const [result] = await pool.query(
+      "UPDATE scooters SET scooter_status = ?, battery_level = ?, location = ST_GeomFromText(?, 4326) WHERE scooter_id = ?",
+      [scooter_status, battery_level, point, id]
+    );
 
-    // Si no hay campos para actualizar, devolver un error
-    if (fields.length === 0) {
-        return res.status(400).json({ message: 'No hay campos para actualizar' });
-    }
-
-    // Construir la consulta SQL
-    const query = `UPDATE scooters SET ${fields.join(', ')} WHERE scooter_id = ?`;
-    values.push(scooter_id);  // Agregar scooter_id al final de los valores
-
-    // Ejecutar la consulta SQL
-    const [result] = await pool.query(query, values);
-
-    // Verificar si se actualizó algún registro
     if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Scooter no encontrado' });
+      return res.status(404).json({ message: "Scooter no encontrado" });
     }
 
-    res.json({ message: 'Scooter actualizado exitosamente' });
+    const [updatedScooter] = await pool.query(
+      "SELECT scooter_id, scooter_status, battery_level, ST_AsText(location) AS location FROM scooters WHERE scooter_id = ?",
+      [id]
+    );
+
+    // Devolver solo el objeto del scooter actualizado
+    res.json(updatedScooter[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al actualizar el scooter" });
+  }
 };
 
 export const deleteScooter = async (req, res) => {
-    const { scooter_id } = req.params;  // Se obtiene el ID del scooter desde los parámetros de la URL
+  const { id } = req.params;
 
-    // Ejecutar la consulta para eliminar el scooter
-    const [result] = await pool.query('DELETE FROM scooters WHERE scooter_id = ?', [scooter_id]);
+  try {
+    const [result] = await pool.query(
+      "DELETE FROM scooters WHERE scooter_id = ?",
+      [id]
+    );
 
-    // Verificar si se eliminó algún registro
     if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Scooter no encontrado' });
+      return res.status(404).json({ message: "Scooter no encontrado" });
     }
 
-    res.json({ message: 'Scooter eliminado exitosamente' });
+    // Devolver mensaje de éxito y código de estado 200
+    res.status(200).json({ message: "Scooter eliminado correctamente" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al eliminar el scooter" });
+  }
 };
 
-// Obtener un scooter por su ID
-export const getScooterById = async (req, res) => {
-    const { scooter_id } = req.params;  // Se obtiene el ID del scooter desde los parámetros de la URL
-
-    // Ejecutar la consulta para obtener el scooter por ID
-    const [rows] = await pool.query('SELECT * FROM scooters WHERE scooter_id = ?', [scooter_id]);
-
-    // Verificar si se encontró algún registro
-    if (rows.length === 0) {
-        return res.status(404).json({ message: 'Scooter no encontrado' });
-    }
-
-    // Responder con el scooter encontrado
-    res.json(rows[0]);
+export const getScooters = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT scooter_id, scooter_status, battery_level, ST_AsText(location) AS location FROM scooters"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al obtener los scooters" });
+  }
 };

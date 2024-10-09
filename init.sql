@@ -1,18 +1,23 @@
+-- Eliminar la base de datos si ya existe
 DROP DATABASE IF EXISTS scooter_management;
 CREATE DATABASE scooter_management;
 
 USE scooter_management;
 
+-- Eliminar la tabla scooters si ya existe
 DROP TABLE IF EXISTS scooters;
+
+-- Crear la tabla scooters con el nuevo estado 'in maintenance'
 CREATE TABLE scooters (
     scooter_id INT NOT NULL AUTO_INCREMENT,
-    scooter_status ENUM('available', 'in use') NOT NULL,
+    scooter_status ENUM('available', 'in use', 'in maintenance') NOT NULL,
     battery_level DECIMAL(5, 2) NOT NULL, 
     location POINT NOT NULL SRID 4326,  -- Asignar SRID 4326 para WGS 84
     PRIMARY KEY (scooter_id),
     SPATIAL INDEX(location)
 );
 
+-- Insertar scooters de ejemplo con ubicación y estado
 INSERT INTO scooters (scooter_status, battery_level, location) 
 VALUES 
 ('available', 95.50, ST_GeomFromText('POINT(40.7128 -74.0060)', 4326)),  -- Nueva York
@@ -40,7 +45,7 @@ CREATE TABLE rides (
     PRIMARY KEY (ride_id)
 );
 
-
+-- Insertar viajes de ejemplo
 INSERT INTO rides (scooter_id, user_id, start_time, end_time, start_location, end_location) 
 VALUES 
 (1, 1001, '2024-10-01 08:00:00', '2024-10-01 08:30:00', ST_GeomFromText('POINT(40.7128 -74.0060)', 4326), ST_GeomFromText('POINT(40.730610 -73.935242)', 4326)),  -- Nueva York, 30 minutos de viaje
