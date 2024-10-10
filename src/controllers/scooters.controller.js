@@ -114,3 +114,15 @@ export const getScooters = async (req, res) => {
     res.status(500).json({ message: "Error al obtener los scooters" });
   }
 };
+
+export const getAvailableScooters = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT scooter_id, scooter_status, battery_level, ST_AsText(location) AS location FROM scooters WHERE scooter_status = 'available'"
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error al obtener los scooters disponibles" });
+  }
+};
